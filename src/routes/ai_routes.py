@@ -130,7 +130,12 @@ def analyze_events():
             example_count=example_count,
             response_style=response_style
         )
-        return jsonify(result.model_dump()), 200
+        return jsonify({
+            "reply": result.summary,
+            "analysis": result.model_dump(),
+            "provider": type(analyzer.provider).__name__,
+            "analysis_request": analysis_request.model_dump(),
+        }), 200
 
     except ValueError as e:
         logger.warning(f"Analysis validation error: {e}")

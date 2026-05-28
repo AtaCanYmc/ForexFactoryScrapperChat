@@ -45,14 +45,14 @@ class IntentParser:
 
         raise ValueError(f"Unknown LLM provider: {name}.")
 
-    def parse(self, user_query: str, today: Optional[date] = None, language: str = LANG_EN) -> IntentParsingResult:
+    def parse(self, user_query: str, today: Optional[date] = None) -> IntentParsingResult:
         if not user_query or not user_query.strip():
             raise ValueError("User query cannot be empty")
 
         eval_date = datetime.combine(today, datetime.min.time()) if today else self.current_date
 
         try:
-            return self.provider.parse_intent(user_query=user_query, current_date=eval_date, language=language)
+            return self.provider.parse_intent(user_query=user_query, current_date=eval_date)
         except (DateRangeExceededException, InvalidDateRangeException):
             raise
         except IntentParserException:

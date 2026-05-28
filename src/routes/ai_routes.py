@@ -214,7 +214,7 @@ def chat():
         # We can adjust this as needed
         max_event_limit = 50
         all_events = client.fetch_economic_data_bundle(
-            sources=sources,
+            sources=normalized_sources,
             start_date=start_date.isoformat(),
             end_date=end_date.isoformat(),
             limit=max_event_limit,

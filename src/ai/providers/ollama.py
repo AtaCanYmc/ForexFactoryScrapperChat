@@ -3,7 +3,6 @@ import logging
 from datetime import datetime
 from typing import Optional
 from pydantic import ValidationError
-from src.ai.ai_constants import LANG_EN
 from src.ai.exceptions import IntentParserException
 from src.ai.providers.base import LLMProvider, IntentParserProvider
 from src.ai.schemas import EconomicAnalysisResult, IntentParsingResult
@@ -109,7 +108,6 @@ class OllamaIntentParserProvider(IntentParserProvider):
             self,
             user_query: str,
             current_date: datetime,
-            language: str = LANG_EN,
     ) -> IntentParsingResult:
         system_prompt = build_intent_system_prompt(current_date)
         user_prompt = build_intent_user_prompt(user_query)
@@ -146,7 +144,7 @@ class OllamaIntentParserProvider(IntentParserProvider):
     @staticmethod
     def _parse_json_output(raw: str) -> IntentParsingResult:
         """Extract and validate JSON from Ollama's free-form text response."""
-        # Strip markdown code fences if present
+        # Strip Markdown code fences if present
         cleaned = raw.strip()
         if "```json" in cleaned:
             start = cleaned.index("```json") + 7

@@ -29,7 +29,6 @@ class IntentParserProvider(ABC):
     def parse_intent(
             self,
             user_query: str,
-            current_date: datetime,
-            language: str = LANG_EN,
+            current_date: datetime
     ) -> IntentParsingResult:
         """Parse user intent from free-form query and return structured result."""

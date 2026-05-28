@@ -74,11 +74,11 @@ def normalize_sources(sources: list) -> list:
     for src in sources:
         src_lower = src.lower()
         if src_lower in ("crypto", "kripto"):
-            normalized.append("cryptocraft")
+            normalized.append("crypto")
         elif src_lower in ("metals", "metal", "altın"):
-            normalized.append("metalsmine")
+            normalized.append("metal")
         elif src_lower in ("energy", "enerji"):
-            normalized.append("energyexch")
+            normalized.append("energy")
         else:
             normalized.append(src_lower)
     return normalized

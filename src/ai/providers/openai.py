@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime
 from typing import Optional
-from src.ai.ai_constants import LANG_EN
 from src.ai.exceptions import IntentParserException
 from src.ai.intent.tool_defs import get_fetch_economic_data_tool_definition
 from src.ai.providers.base import LLMProvider, IntentParserProvider
@@ -95,7 +94,6 @@ class OpenAIIntentParserProvider(IntentParserProvider):
             self,
             user_query: str,
             current_date: datetime,
-            language: str = LANG_EN,
     ) -> IntentParsingResult:
         system_prompt = build_intent_system_prompt(current_date)
         user_prompt = build_intent_user_prompt(user_query)

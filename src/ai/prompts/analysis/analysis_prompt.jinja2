@@ -1,0 +1,47 @@
+You are an expert financial analyst. Analyze the following economic calendar events and provide structured insights for investors.
+
+{% if focus %}Focus on {{ focus }} perspective.
+
+{% endif %}
+Economic Events Data:
+{{ events_json }}
+
+{% if response_style %}Response style: {{ response_style }}.
+
+{% endif %}
+{% if example_count and example_count|int > 0 %}Please include up to {{ example_count }} brief examples or highlights where useful in the analyses.
+
+{% endif %}
+
+Provide your analysis in valid JSON format matching this exact structure:
+{
+    "summary": "2-3 sentence overview for investors",
+    "analyses": [
+        {
+            "event_name": "Event name",
+            "currency": "Currency code",
+            "time": "Event time",
+            "expectation_vs_previous": "Analysis of forecast vs previous",
+            "actual_vs_expectation": "Analysis if actual is released, or null",
+            "market_implication": "Brief market implications",
+            "sentiment": "bullish|neutral|bearish",
+            "confidence": "low|medium|high"
+        }
+    ],
+    "overall_sentiment": "bullish|neutral|bearish",
+    "key_events": ["Top 3-5 events"],
+    "risk_level": "low|medium|high"
+}
+
+Respond ONLY with valid JSON, no markdown, no code blocks, no additional text.
+Language: {{ lang_instruction }}
+
+CRITICAL REQUIREMENT FOR JSON MODE:
+You must ALWAYS return a JSON object that strictly adheres to the requested schema.
+Even if the events list is empty, or there is no major economic data, you MUST still provide all fields with empty/default values:
+- "summary": (Provide a brief text saying no events were found)
+- "overall_sentiment": "neutral"
+- "key_events": []
+- "risk_level": "low"
+
+Never skip these fields under any circumstances.

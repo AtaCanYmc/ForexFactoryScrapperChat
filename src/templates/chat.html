@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ForexFactoryScrapper — Chat</title>
+    <style>
+        :root{
+          --bg: linear-gradient(135deg,#0f172a 0%,#0b1220 100%);
+          --card: rgba(255,255,255,0.04);
+          --accent: #06b6d4;
+          --muted: #94a3b8;
+          --glass: rgba(255,255,255,0.06);
+        }
+        html,body{height:100%;margin:0}
+        body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; color:#e6eef8; background:var(--bg); -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale }
+        .container{max-width:1000px;margin:40px auto;padding:24px}
+        .hero{background:linear-gradient(180deg, rgba(255,255,255,0.03), transparent); border-radius:12px;padding:18px;box-shadow:0 6px 18px rgba(2,6,23,0.6);display:flex;gap:20px;align-items:center}
+        h1{margin:0;font-size:1.3rem}
+        p.lead{margin:6px 0 0;color:var(--muted)}
+
+        .layout{display:grid;grid-template-columns:260px 1fr;gap:16px;margin-top:18px}
+        .panel{background:var(--card);padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,0.03)}
+
+        /* Filters */
+        label.field{display:block;font-size:0.9rem;color:var(--muted);margin-bottom:6px}
+        select,input[type=date]{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+        .btn{display:inline-block;padding:8px 12px;border-radius:8px;text-decoration:none;color:#04263b;font-weight:600;background:#e6eef8}
+        .btn-apply{background:var(--accent);color:#04263b;font-weight:700;padding:8px;border-radius:8px;border:none;cursor:pointer}
+
+        /* Chat */
+        .chat-window{display:flex;flex-direction:column;height:64vh}
+        .messages{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+        .msg.user{align-self:flex-end;background:linear-gradient(90deg,#ecfccb,#bbf7d0);color:#04263b;padding:10px;border-radius:10px;max-width:78%}
+        .msg.bot{align-self:flex-start;background:rgba(255,255,255,0.03);color:var(--muted);padding:10px;border-radius:10px;max-width:78%}
+        .composer{display:flex;gap:8px;margin-top:8px}
+        textarea{flex:1;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+        .meta{font-size:0.85rem;color:var(--muted);margin-bottom:8px}
+
+        @media (max-width:700px){.layout{grid-template-columns:1fr}.hero{flex-direction:column;align-items:flex-start}}
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <div class="hero">
+        <div style="flex:1">
+            <h1>AI Chat — Economic Calendar</h1>
+            <p class="lead">Ask questions about economic releases and get conversational analyses powered by LLMs.</p>
+        </div>
+        <div style="min-width:120px;text-align:right">
+            <a class="btn" href="/">Home</a>
+        </div>
+    </div>
+
+    <div class="layout">
+        <aside class="panel">
+            <div class="meta">Filters</div>
+            <label class="field" for="source">Source</label>
+            <select id="source" aria-label="source selector">
+                <option value="forex">ForexFactory</option>
+                <option value="cryptocraft">CryptoCraft</option>
+                <option value="metalsmine">MetalsMine</option>
+                <option value="energyexch">EnergyExch</option>
+            </select>
+
+            <div style="height:10px"></div>
+            <label class="field" for="start_date">Start date</label>
+            <input id="start_date" type="date"/>
+
+            <div style="height:10px"></div>
+            <label class="field" for="end_date">End date</label>
+            <input id="end_date" type="date"/>
+
+            <div style="height:12px"></div>
+            <button id="apply_filters" class="btn-apply" aria-label="apply filters">Apply</button>
+            <button id="clear_history"
+                    style="margin-left:8px;padding:8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);cursor:pointer">
+                Clear
+            </button>
+            <div style="height:8px"></div>
+            <div class="meta">Tip: use natural language like "Bugün" or "What happened with crypto yesterday?"</div>
+        </aside>
+
+        <main class="panel">
+            <div class="chat-window">
+                <div id="messages" class="messages" aria-live="polite"></div>
+                <div class="composer">
+                    <textarea id="message_input" rows="2"
+                              placeholder="Ask about today's important releases or 'What happened with crypto yesterday?'"
+                              aria-label="message input"></textarea>
+                    <button id="send_btn" class="btn-apply">Send</button>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+
+<script>
+    // LocalStorage-backed chat history
+    const STORAGE_KEY = 'ffscraper_chat_history_v1'
+    const messagesEl = document.getElementById('messages')
+    const inputEl = document.getElementById('message_input')
+    const sendBtn = document.getElementById('send_btn')
+    const sourceEl = document.getElementById('source')
+    const startEl = document.getElementById('start_date')
+    const endEl = document.getElementById('end_date')
+    const applyBtn = document.getElementById('apply_filters')
+    const clearBtn = document.getElementById('clear_history')
+
+    let currentFilters = { source: sourceEl.value, start_date: null, end_date: null }
+
+    function loadHistory(){
+      try{
+        const raw = sessionStorage.getItem(STORAGE_KEY)
+        if(!raw) return []
+        return JSON.parse(raw)
+      }catch(e){ console.warn('Failed to load history', e); return [] }
+    }
+
+    function saveHistory(arr){
+      try{ sessionStorage.setItem(STORAGE_KEY, JSON.stringify(arr)) }catch(e){ console.warn('Failed to save history', e) }
+    }
+
+    function addMessageToHistory(role, text){
+      const hist = loadHistory()
+      hist.push({role, text, ts: Date.now()})
+      saveHistory(hist)
+    }
+
+    function clearHistory(){
+      localStorage.removeItem(STORAGE_KEY)
+      renderMessages([])
+    }
+
+    function renderMessages(extHist){
+      const hist = Array.isArray(extHist) ? extHist : loadHistory()
+      messagesEl.innerHTML = ''
+      if(hist.length === 0){
+        const p = document.createElement('div')
+        p.className = 'meta'
+        p.textContent = 'No previous messages — start a conversation.'
+        messagesEl.appendChild(p)
+        return
+      }
+      hist.forEach(m=>{
+        const d = document.createElement('div')
+        d.className = 'msg ' + (m.role === 'user' ? 'user' : 'bot')
+        // Render as markdown for bot, plain for user
+        if(m.role === 'bot'){
+          d.innerHTML = marked.parse(m.text || '')
+        } else {
+          d.innerHTML = (m.text || '').replace(/\n/g,'<br/>')
+        }
+        messagesEl.appendChild(d)
+      })
+      messagesEl.scrollTop = messagesEl.scrollHeight
+    }
+
+    applyBtn.addEventListener('click', ()=>{
+      currentFilters.source = sourceEl.value
+      currentFilters.start_date = startEl.value || null
+      currentFilters.end_date = endEl.value || null
+      // show a small system message in UI (not persisted)
+      const sys = {role:'bot', text:`Filters updated: ${currentFilters.source}`}
+      const t = loadHistory(); t.push(sys); saveHistory(t); renderMessages()
+    })
+
+    clearBtn.addEventListener('click', ()=>{ if(confirm('Clear chat history?')) clearHistory() })
+
+    async function sendMessage(){
+      const msg = inputEl.value.trim()
+      if(!msg) return
+      inputEl.value = ''
+      addMessageToHistory('user', msg)
+      renderMessages()
+
+      // build payload
+      const payload = { message: msg, history: loadHistory().slice(-20), source: currentFilters.source }
+      if(currentFilters.start_date) payload.start_date = currentFilters.start_date
+      if(currentFilters.end_date) payload.end_date = currentFilters.end_date
+
+      // show temporary thinking indicator
+      const thinkingId = 'thinking-'+Date.now()
+      addMessageToHistory('bot', 'Thinking...')
+      renderMessages()
+
+      try{
+        const res = await fetch('/api/ai/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+        const json = await res.json()
+        // remove last 'Thinking...' bot message
+        let hist = loadHistory()
+        if(hist.length && hist[hist.length-1].text === 'Thinking...') hist.pop()
+
+        if(json.error){
+          hist.push({role:'bot', text:'Error: '+json.error, ts:Date.now()})
+        } else {
+          const reply = json.reply || (json.analysis && json.analysis.summary) || 'No reply'
+          hist.push({role:'bot', text: reply, ts:Date.now()})
+        }
+        saveHistory(hist)
+        renderMessages()
+      }catch(err){
+        // replace thinking with error
+        let hist = loadHistory()
+        if(hist.length && hist[hist.length-1].text === 'Thinking...') hist.pop()
+        hist.push({role:'bot', text:'Error connecting to server', ts:Date.now()})
+        saveHistory(hist)
+        renderMessages()
+      }
+    }
+
+    sendBtn.addEventListener('click', sendMessage)
+    inputEl.addEventListener('keydown', (e)=>{ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage() } })
+
+    // initial render
+    renderMessages()
+</script>
+</body>
+</html>

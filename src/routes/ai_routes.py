@@ -1,0 +1,248 @@
+"""Flask routes for AI-powered economic event analysis."""
+
+import logging
+from flask import Blueprint, request, jsonify
+from datetime import date
+
+from src.ai.ai_constants import (
+    FAILED_ANALYZE_CONVERSATION_RESPONSE_EN,
+    SITE_MAP,
+    NO_EVENTS_FOUND_RESPONSE_EN,
+    SERVER_CONFIG_ERROR_EN,
+)
+from src.ai.ai_utils import normalize_sources, fetch_events, validate_date_range
+from src.ai.analyzer import EconomicAnalyzer
+from src.ai.schemas import AnalysisRequest
+from src.ai.intent_parser import IntentParser
+
+logger = logging.getLogger(__name__)
+
+ai_bp = Blueprint("ai", __name__)
+
+# Global instances for lazy-loading
+_analyzer = None
+_intent_parser = None
+
+
+def get_analyzer():
+    """Get or initialize the analyzer (lazy loading)."""
+    global _analyzer
+    if _analyzer is None:
+        try:
+            _analyzer = EconomicAnalyzer()
+            logger.info("Economic analyzer initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize analyzer: {e}")
+            raise
+    return _analyzer
+
+
+def get_intent_parser():
+    """Get or initialize the intent parser (lazy loading)."""
+    global _intent_parser
+    if _intent_parser is None:
+        try:
+            _intent_parser = IntentParser()
+            logger.info("Intent parser initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize intent parser: {e}")
+            raise
+    return _intent_parser
+
+
+@ai_bp.route("/api/ai/analyze", methods=["POST"])
+def analyze_events():
+    """Analyze economic events using LLM."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body must be valid JSON"}), 400
+
+        analysis_request = AnalysisRequest(**data)
+
+    except ValueError as e:
+        logger.warning(f"Invalid request: {e}")
+        return jsonify({"error": f"Invalid request: {str(e)}"}), 400
+    except Exception as e:
+        logger.warning(f"Request parsing failed: {e}")
+        return jsonify({"error": "Request format error"}), 400
+
+    example_count = data.get("example_count", 0)
+    response_style = data.get("response_style")
+
+    try:
+        if example_count is None:
+            example_count = 0
+        else:
+            example_count = int(example_count)
+            if example_count < 0:
+                raise ValueError("example_count must be >= 0")
+    except Exception as e:
+        return jsonify({"error": f"Invalid example_count: {e}"}), 400
+
+    allowed_styles = {"concise", "detailed", "step_by_step", "balanced"}
+    if response_style:
+        if not isinstance(response_style, str) or response_style not in allowed_styles:
+            return (
+                jsonify(
+                    {
+                        "error": (
+                            "Invalid response_style. Allowed values: "
+                            + ", ".join(sorted(allowed_styles))
+                        )
+                    }
+                ),
+                400,
+            )
+
+    try:
+        analyzer = get_analyzer()
+        result = analyzer.analyze(
+            analysis_request, example_count=example_count, response_style=response_style
+        )
+        return jsonify(result.model_dump()), 200
+
+    except ValueError as e:
+        logger.warning(f"Analysis validation error: {e}")
+        return jsonify({"error": f"Analysis failed: {str(e)}"}), 400
+    except Exception as e:
+        logger.exception(f"Unexpected error during analysis: {e}")
+        return (
+            jsonify(
+                {
+                    "error": "Analysis failed due to server error",
+                    "detail": str(e) if logger.level == logging.DEBUG else None,
+                }
+            ),
+            500,
+        )
+
+
+@ai_bp.route("/api/ai/health", methods=["GET"])
+def health():
+    """Health check for AI analyzer."""
+    try:
+        analyzer = get_analyzer()
+        provider_type = type(analyzer.provider).__name__
+        return jsonify({"status": "ok", "provider": provider_type, "ready": True}), 200
+    except Exception as e:
+        logger.warning(f"Health check failed: {e}")
+        return jsonify({"status": "error", "error": str(e), "ready": False}), 503
+
+
+@ai_bp.route("/api/ai/chat", methods=["POST"])
+def chat():
+    """Chat-style endpoint that integrates intent parsing, scraping, and evaluation."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body must be valid JSON"}), 400
+    except Exception as e:
+        logger.warning(f"Invalid JSON: {e}")
+        return jsonify({"error": "Request must be valid JSON"}), 400
+
+    message = data.get("message")
+    explicit_source = data.get("source")
+    explicit_start = data.get("start_date")
+    explicit_end = data.get("end_date")
+
+    if not message or not isinstance(message, str):
+        return jsonify({"error": "'message' field required and must be a string"}), 400
+
+    try:
+        parser = get_intent_parser()
+        parsed_intent = parser.parse(message, today=date.today())
+        logger.info(f"Parsed intent: {parsed_intent}")
+    except Exception as e:
+        logger.warning(f"Intent parsing failed, falling back to chat: {e}")
+        return jsonify(FAILED_ANALYZE_CONVERSATION_RESPONSE_EN), 200
+
+    # Handle general conversation intent
+    if parsed_intent.intent == "chat":
+        return (
+            jsonify(
+                {
+                    "reply": parsed_intent.chat_response,
+                    "analysis": None,
+                }
+            ),
+            200,
+        )
+
+    # Apply intent overrides if explicitly passed via request body
+    if explicit_source:
+        parsed_intent.sources = [explicit_source]
+    if explicit_start:
+        parsed_intent.start_date = explicit_start
+    if explicit_end:
+        parsed_intent.end_date = explicit_end
+
+    # Date range formatting and boundary constraints
+    try:
+        start_date, end_date, warning = validate_date_range(
+            parsed_intent.start_date, parsed_intent.end_date, max_days=7
+        )
+        if warning:
+            logger.warning(f"Date range adjusted: {warning}")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    if not start_date or not end_date:
+        start_date = end_date = date.today()
+
+    sources = parsed_intent.sources if parsed_intent.sources else ["forex"]
+    normalized_sources = normalize_sources(sources)
+
+    try:
+        from .common_helpers import _resolve_helpers
+    except Exception as e:
+        logger.exception(f"Failed to resolve scraper helpers for chat source: {e}")
+        return jsonify(SERVER_CONFIG_ERROR_EN), 500
+
+    all_events = fetch_events(
+        SITE_MAP, normalized_sources, _resolve_helpers, start_date, end_date, logger
+    )
+
+    if not all_events:
+        return jsonify(NO_EVENTS_FOUND_RESPONSE_EN), 200
+
+    # Build evaluation and response structured block
+    try:
+        analysis_payload = {"events": all_events, "language": parsed_intent.language}
+        if data.get("focus"):
+            analysis_payload["focus"] = data.get("focus")
+        example_count = int(data.get("example_count", 0) or 0)
+        response_style = data.get("response_style")
+
+        analysis_request = AnalysisRequest(**analysis_payload)
+    except Exception as e:
+        logger.warning(f"Invalid analysis payload: {e}")
+        return jsonify({"error": f"Invalid analysis payload: {e}"}), 400
+
+    try:
+        analyzer = get_analyzer()
+        result = analyzer.analyze(
+            analysis_request, example_count=example_count, response_style=response_style
+        )
+        summary = result.summary
+        key_events = result.key_events if hasattr(result, "key_events") else []
+        reply = f"{summary}\n\nKey events:\n"
+        for k in key_events[:5]:
+            reply += f"- {k}\n"
+
+        return jsonify({"reply": reply, "analysis": result.model_dump()}), 200
+
+    except ValueError as e:
+        logger.warning(f"Analysis validation error: {e}")
+        return jsonify({"error": f"Analysis failed: {str(e)}"}), 400
+    except Exception as e:
+        logger.exception(f"Unexpected error during chat analysis: {e}")
+        return (
+            jsonify(
+                {
+                    "error": "Analysis failed due to server error",
+                    "detail": str(e) if logger.level == logging.DEBUG else None,
+                }
+            ),
+            500,
+        )

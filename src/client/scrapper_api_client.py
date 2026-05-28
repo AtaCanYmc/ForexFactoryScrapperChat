@@ -67,17 +67,16 @@ class ScrapperAPIClient:
             response = self.client.get(endpoint, params=params)
             response.raise_for_status()
             body = response.json()
-            validated_response = PaginatedBundleResponse.model_validate(body)
+            PaginatedBundleResponse.model_validate(body)
 
-            if isinstance(validated_response, dict):
-                events = validated_response.get("results", [])
-                breakdown = validated_response.get("source_breakdown", {})
+            if isinstance(body, dict):
+                events = body.get("results", [])
+                breakdown = body.get("source_breakdown", {})
                 logger.info(f"Successfully fetched {len(events)} total events. "
                             f"Breakdown: {breakdown}. "
-                            f"Applied limit: {limit}, offset: {offset}")
+                            f"Applied limit: {limit}, "
+                            f"offset: {offset}")
                 return events
-
-            return []
 
         except httpx.HTTPStatusError as exc:
             logger.error(f"Bundle API returned error status {exc.response.status_code} for {exc.request.url}")
@@ -88,6 +87,9 @@ class ScrapperAPIClient:
         except Exception as exc:
             logger.error(f"Unexpected error parsing Bundle API response: {exc}")
             return []
+
+        logger.info(f"Endpoint {endpoint} returned no events. Params were: {params}")
+        return []
 
     def close(self):
         """Close the underlying HTTPX client session."""

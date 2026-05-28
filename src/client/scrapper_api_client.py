@@ -3,6 +3,8 @@ import os
 from typing import List, Dict, Any, Optional
 import httpx
 
+from src.client.schemas import PaginatedBundleResponse
+
 logger = logging.getLogger(__name__)
 
 
@@ -65,16 +67,15 @@ class ScrapperAPIClient:
             response = self.client.get(endpoint, params=params)
             response.raise_for_status()
             body = response.json()
+            validated_response = PaginatedBundleResponse.model_validate(body)
 
-            if isinstance(body, dict):
-                events = body.get("results", [])
-                breakdown = body.get("source_breakdown", {})
-                logger.info(f"Successfully fetched {len(events)} total events. Breakdown: {breakdown}")
+            if isinstance(validated_response, dict):
+                events = validated_response.get("results", [])
+                breakdown = validated_response.get("source_breakdown", {})
+                logger.info(f"Successfully fetched {len(events)} total events. "
+                            f"Breakdown: {breakdown}. "
+                            f"Applied limit: {limit}, offset: {offset}")
                 return events
-
-            if isinstance(body, list):
-                logger.warning("API returned a direct list instead of paginated envelope.")
-                return body
 
             return []
 

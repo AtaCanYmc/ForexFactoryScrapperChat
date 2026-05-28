@@ -1,8 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional
-
-from src.ai.ai_constants import LANG_EN
 from src.ai.schemas import EconomicAnalysisResult, IntentParsingResult
 
 

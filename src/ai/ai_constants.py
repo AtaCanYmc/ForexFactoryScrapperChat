@@ -1,8 +1,5 @@
 from typing import List
 
-LANG_TR = "tr"
-LANG_EN = "en"
-
 FAILED_ANALYZE_CONVERSATION_RESPONSE_EN = {
     "reply": "I'm sorry, I didn't understand your request. Please try again.",
     "analysis": None,
@@ -21,5 +18,7 @@ MAX_DATE_RANGE_DAYS: int = 7
 SUPPORTED_SOURCES: List[str] = ["forex", "crypto", "metal", "energy"]
 """Valid values for the ``sources`` parameter."""
 
+LANG_TR = "tr"
+LANG_EN = "en"
 SUPPORTED_LANGUAGES: List[str] = [LANG_EN, LANG_TR]
 """Valid values for the ``language`` parameter."""

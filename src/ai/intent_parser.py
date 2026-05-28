@@ -2,8 +2,6 @@ import logging
 import os
 from datetime import date, datetime
 from typing import Optional, Dict, Any
-
-from src.ai.ai_constants import LANG_EN
 from src.ai.exceptions import IntentParserException, DateRangeExceededException, InvalidDateRangeException
 from src.ai.providers import (
     OllamaIntentParserProvider,

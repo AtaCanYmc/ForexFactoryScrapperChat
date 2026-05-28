@@ -174,10 +174,13 @@ def chat():
     # Handle general conversation intent
     if parsed_intent.intent == "chat":
         logger.info(f"Chat intent: {parsed_intent}")
+        reply = parsed_intent.chat_response or "How can I assist you with economic events today?"
         return jsonify({
-            "reply": parsed_intent.chat_response or ("Let's chat!"
-                                                     " How can I assist you with economic events today?"),
+            "reply": reply,
             "analysis": None,
+            "provider": type(parser.provider).__name__,
+            "parsed_intent": parsed_intent.model_dump(),
+            "events": None
         }), 200
 
     # Date range formatting and boundary constraints
@@ -243,7 +246,10 @@ def chat():
         logger.info(f"Analysis result: {result.model_dump()}")
         return jsonify({
             "reply": result.summary,
-            "analysis": result.model_dump()
+            "analysis": result.model_dump(),
+            "parsed_intent": parsed_intent.model_dump(),
+            "provider": type(analyzer.provider).__name__,
+            "events": all_events,
         }), 200
 
     except ValueError as e:

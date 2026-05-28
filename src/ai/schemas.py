@@ -3,7 +3,6 @@
 Uses Structured Output pattern for reliable JSON parsing from LLMs.
 """
 from datetime import datetime
-from email.policy import default
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field, ConfigDict
 

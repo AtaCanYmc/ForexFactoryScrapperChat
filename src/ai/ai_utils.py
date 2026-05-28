@@ -80,7 +80,7 @@ def render_analysis_user_prompt(
     extra parameters (example_count, response_style) while keeping a single
     templated source of truth.
     """
-    lang_instruction = "English" if language == "en" else language.capitalize()
+    lang_instruction = language.capitalize()
     events_json = json.dumps(events_data, indent=2)
 
     templates_dir = os.path.join(os.path.dirname(__file__), "prompts/analysis")
@@ -108,7 +108,7 @@ def render_analysis_system_prompt(
     This central function allows all providers to render the system prompt with
     templated source of truth.
     """
-    lang_instruction = "English" if language == "en" else language.capitalize()
+    lang_instruction = language.capitalize()
 
     templates_dir = os.path.join(os.path.dirname(__file__), "prompts/analysis")
     env = Environment(loader=FileSystemLoader(templates_dir), autoescape=False)

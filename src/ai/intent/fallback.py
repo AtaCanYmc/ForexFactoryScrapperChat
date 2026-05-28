@@ -1,7 +1,6 @@
 import re
 from datetime import date, timedelta, datetime
 from typing import Optional, List
-from src.ai.ai_constants import LANG_EN
 from src.ai.schemas import IntentParsingResult, FetchEconomicDataParams
 
 
@@ -70,8 +69,7 @@ class SimpleIntentParser:
     def parse(
             self,
             user_query: str,
-            today: Optional[date] = None,
-            language: str = LANG_EN,
+            today: Optional[date] = None
     ) -> IntentParsingResult:
         """Parse intent using keyword heuristics."""
         today = today or date.today()

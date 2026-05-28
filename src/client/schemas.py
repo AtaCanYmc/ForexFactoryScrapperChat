@@ -10,7 +10,11 @@ class ScrapperEventRecord(BaseModel):
     """Represents a single economic event record returned from the Scrapper API."""
     id: Optional[str] = Field(None, alias="ID")
     time: str = Field(..., alias="Time")
-    currency: str = Field(..., alias="Currency")
+    currency: Optional[str] = Field(
+        default='n/a',
+        alias="Currency",
+        description="Currency code (e.g., USD, EUR)"
+    )
     event: str = Field(..., alias="Event")
     forecast: str = Field(..., alias="Forecast")
     actual: str = Field(..., alias="Actual")

@@ -3,6 +3,7 @@
 Uses Structured Output pattern for reliable JSON parsing from LLMs.
 """
 from datetime import datetime
+from email.policy import default
 from typing import List, Optional, Any
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -33,17 +34,23 @@ class EconomicEvent(BaseModel):
 
     event_id: Optional[str] = Field(None, alias="ID")
     time: str = Field(
-        ..., alias="Time", description="Event time in format YYYY-MM-DD HH:MM:SS"
+        ...,
+        alias="Time",
+        description="Event time in format YYYY-MM-DD HH:MM:SS"
     )
-    currency: str = Field(
-        ..., alias="Currency", description="Currency code (e.g., USD, EUR)"
+    currency: Optional[str] = Field(
+        default='n/a',
+        alias="Currency",
+        description="Currency code (e.g., USD, EUR)"
     )
     event_name: str = Field(..., alias="Event", description="Event name")
     forecast: str = Field(..., alias="Forecast", description="Forecasted value")
     actual: str = Field(..., alias="Actual", description="Actual value (if released)")
     previous: str = Field(..., alias="Previous", description="Previous period value")
     impact: str = Field(
-        ..., alias="Impact", description="Impact level: low, medium, high, or n/a"
+        ...,
+        alias="Impact",
+        description="Impact level: low, medium, high, or n/a"
     )
 
     model_config = ConfigDict(populate_by_name=True)  # Allow both field name and alias
@@ -66,7 +73,10 @@ class EventAnalysis(BaseModel):
     """Analysis result for a single economic event."""
 
     event_name: str = Field(..., description="Name of the economic event")
-    currency: str = Field(..., description="Currency code")
+    currency: Optional[str] = Field(
+        default="n/a",
+        description="Currency code or 'n/a' if not applicable"
+    )
     time: str = Field(..., description="Event time")
 
     # Analysis results

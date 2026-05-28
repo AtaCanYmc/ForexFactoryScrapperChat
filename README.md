@@ -5,7 +5,11 @@
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Flask](https://img.shields.io/badge/flask-3.1.3-orange.svg)
 
-An institutional-grade, AI-powered conversational assistant and economic event analyzer. This system combines real-time data scraping pipelines (covering forex, cryptocurrencies, metals, and energy) with state-of-the-art Large Language Models (LLMs) to deliver structured, action-oriented financial analysis directly to traders and investors.
+An AI-powered conversational assistant and economic event analyzer. This system combines real-time data scraping pipelines (covering forex, cryptocurrencies, metals, and energy) with state-of-the-art Large Language Models (LLMs) to deliver structured, action-oriented financial analysis directly to traders and investors.
+
+<p align="center">
+  <img src="assets/images/example_chat.png" alt="example-chat-ss" width="600">
+</p>
 
 ---
 

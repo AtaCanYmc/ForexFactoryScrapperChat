@@ -118,13 +118,6 @@ OPENAPI_SPEC = {
                                         "type": "array",
                                         "items": {"type": "object"},
                                     },
-                                    "source": {
-                                        "type": "string",
-                                        "description": (
-                                            "Optional data source filter: "
-                                            "forex, cryptocraft, metalsmine, energyexch"
-                                        ),
-                                    },
                                     "start_date": {"type": "string", "format": "date"},
                                     "end_date": {"type": "string", "format": "date"},
                                 },

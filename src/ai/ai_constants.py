@@ -18,7 +18,7 @@ SERVER_CONFIG_ERROR_EN = {"error": "Server configuration error"}
 MAX_DATE_RANGE_DAYS: int = 7
 """Maximum allowed span between start_date and end_date (inclusive)."""
 
-SUPPORTED_SOURCES: List[str] = ["forex", "cryptocraft", "metals", "energy"]
+SUPPORTED_SOURCES: List[str] = ["forex", "crypto", "metal", "energy"]
 """Valid values for the ``sources`` parameter."""
 
 SUPPORTED_LANGUAGES: List[str] = [LANG_EN, LANG_TR]

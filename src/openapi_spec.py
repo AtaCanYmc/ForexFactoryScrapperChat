@@ -4,7 +4,7 @@ OPENAPI_SPEC = {
     "info": {
         "title": "ForexFactoryScrapper LLM Chat",
         "version": "1.0.0",
-        "description": "OpenAPI spec with schemas for the scraping API",
+        "description": "OpenAPI spec with schemas for the scraping and AI analysis API",
         "contact": {"name": "Repo maintainer", "email": "atacanymc@gmail.com"},
         "license": {"name": "MIT", "url": "https://opensource.org/licenses/MIT"},
     },
@@ -55,7 +55,7 @@ OPENAPI_SPEC = {
                                     },
                                     "language": {"type": "string", "default": "en"},
                                     "focus": {"type": ["string", "null"]},
-                                    "example_count": {"type": "integer", "minimum": 0},
+                                    "example_count": {"type": "integer", "minimum": 0, "default": 0},
                                     "response_style": {
                                         "type": "string",
                                         "description": "Preferred response style",
@@ -78,7 +78,7 @@ OPENAPI_SPEC = {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/EconomicAnalysisResult"
+                                    "$ref": "#/components/schemas/AnalyzeResponse"
                                 }
                             }
                         },
@@ -113,13 +113,19 @@ OPENAPI_SPEC = {
                             "schema": {
                                 "type": "object",
                                 "properties": {
-                                    "message": {"type": "string"},
-                                    "history": {
-                                        "type": "array",
-                                        "items": {"type": "object"},
+                                    "message": {"type": "string", "description": "Conversational question or prompt about economic data"},
+                                    "focus": {"type": ["string", "null"], "description": "Optional analysis focus"},
+                                    "example_count": {"type": "integer", "minimum": 0, "default": 0},
+                                    "response_style": {
+                                        "type": "string",
+                                        "description": "Preferred response style",
+                                        "enum": [
+                                            "concise",
+                                            "detailed",
+                                            "step_by_step",
+                                            "balanced",
+                                        ],
                                     },
-                                    "start_date": {"type": "string", "format": "date"},
-                                    "end_date": {"type": "string", "format": "date"},
                                 },
                                 "required": ["message"],
                             }
@@ -129,7 +135,13 @@ OPENAPI_SPEC = {
                 "responses": {
                     "200": {
                         "description": "Conversational reply and optional structured analysis",
-                        "content": {"application/json": {"schema": {"type": "object"}}},
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ChatResponse"
+                                }
+                            }
+                        },
                     },
                     "400": {
                         "description": "Bad Request",
@@ -180,11 +192,27 @@ OPENAPI_SPEC = {
                 },
                 "required": ["error"],
             },
+            "Record": {
+                "type": "object",
+                "properties": {
+                    "ID": {"type": ["string", "null"], "description": "Unique identifier of the event"},
+                    "Time": {"type": "string", "description": "Time of the event in format YYYY-MM-DD HH:MM:SS"},
+                    "Currency": {"type": ["string", "null"], "default": "n/a", "description": "Currency code"},
+                    "Event": {"type": "string", "description": "Name of the event"},
+                    "Forecast": {"type": "string", "description": "Expected value"},
+                    "Actual": {"type": "string", "description": "Actual value if released"},
+                    "Previous": {"type": "string", "description": "Previous period value"},
+                    "Impact": {"type": ["string", "null"], "description": "Impact level (low, medium, high, n/a)"},
+                    "_date": {"type": "string", "description": "Event Date format YYYY-MM-DD"},
+                    "_source": {"type": "string", "description": "Source name (e.g. forex, crypto)"}
+                },
+                "required": ["Time", "Event", "Forecast", "Actual", "Previous"]
+            },
             "EventAnalysis": {
                 "type": "object",
                 "properties": {
                     "event_name": {"type": "string"},
-                    "currency": {"type": "string"},
+                    "currency": {"type": ["string", "null"]},
                     "time": {"type": "string"},
                     "expectation_vs_previous": {"type": "string"},
                     "actual_vs_expectation": {
@@ -199,8 +227,8 @@ OPENAPI_SPEC = {
                 },
                 "required": [
                     "event_name",
-                    "currency",
                     "time",
+                    "expectation_vs_previous",
                     "market_implication",
                     "sentiment",
                     "confidence",
@@ -229,6 +257,77 @@ OPENAPI_SPEC = {
                     "risk_level",
                 ],
             },
+            "AnalyzeResponse": {
+                "type": "object",
+                "properties": {
+                    "reply": {"type": "string", "description": "Summary of the analysis"},
+                    "analysis": {"$ref": "#/components/schemas/EconomicAnalysisResult"},
+                    "provider": {"type": "string", "description": "Name of the LLM provider"},
+                    "analysis_request": {
+                        "type": "object",
+                        "properties": {
+                            "events": {
+                                "type": "array",
+                                "items": {"$ref": "#/components/schemas/Record"}
+                            },
+                            "language": {"type": "string"},
+                            "focus": {"type": ["string", "null"]}
+                        },
+                        "required": ["events"]
+                    }
+                },
+                "required": ["reply", "analysis", "provider", "analysis_request"]
+            },
+            "ChatResponse": {
+                "type": "object",
+                "properties": {
+                    "reply": {"type": "string", "description": "Response text or economic analysis summary"},
+                    "analysis": {
+                        "oneOf": [
+                            {"$ref": "#/components/schemas/EconomicAnalysisResult"},
+                            {"type": "null"}
+                        ]
+                    },
+                    "parsed_intent": {
+                        "type": "object",
+                        "properties": {
+                            "intent_type": {"type": "string", "enum": ["fetch_data", "chat"]},
+                            "intent": {"type": "string"},
+                            "fetch_params": {
+                                "oneOf": [
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "sources": {"type": "array", "items": {"type": "string"}},
+                                            "start_date": {"type": "string", "format": "date"},
+                                            "end_date": {"type": "string", "format": "date"},
+                                            "language": {"type": "string"}
+                                        },
+                                        "required": ["sources", "start_date", "end_date"]
+                                    },
+                                    {"type": "null"}
+                                ]
+                            },
+                            "chat_response": {"type": ["string", "null"]},
+                            "confidence": {"type": "number"},
+                            "reasoning": {"type": "string"},
+                            "language": {"type": "string"},
+                            "sources": {"type": "array", "items": {"type": "string"}},
+                            "start_date": {"type": ["string", "null"], "format": "date"},
+                            "end_date": {"type": ["string", "null"], "format": "date"}
+                        },
+                        "required": ["intent_type", "confidence", "reasoning", "language"]
+                    },
+                    "provider": {"type": "string", "description": "LLM Provider name"},
+                    "events": {
+                        "oneOf": [
+                            {"type": "array", "items": {"$ref": "#/components/schemas/Record"}},
+                            {"type": "null"}
+                        ]
+                    }
+                },
+                "required": ["reply", "analysis", "parsed_intent", "provider", "events"]
+            }
         }
     },
 }

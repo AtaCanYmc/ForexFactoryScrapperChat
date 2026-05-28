@@ -2,246 +2,155 @@
 
 ## Overview
 
-We've implemented a sophisticated intent parsing system using LLM function calling (tool use) to intelligently extract user intent, data sources, and date ranges from natural language. The system intelligently routes between:
+The chat engine utilizes a sophisticated NLU intent parser powered by LLM function calling (or raw structured output). This system dynamically determines user intent from natural language, decides if economic calendar/volatility data needs to be fetched, resolves relative dates, maps currency sectors to sources, and handles fallback conversational chat.
 
-1. **Fetch Data** - User asking about economic events/data
-2. **Chat** - General conversation that doesn't require data fetching
+---
 
-## Architecture
+## 🏗️ Architecture Flow
+
+```
+[ User Prompt ] ---> [ /api/ai/chat Endpoint ] 
+                              |
+                     [ NLU IntentParser ]
+                              |
+            +-----------------+-----------------+
+            |                                   |
+    [ Intent: chat ]                   [ Intent: fetch_data ]
+            |                                   |
+   [ Direct Conversational ]          [ Extract sources, date boundaries ]
+   [ Response in User Lang ]                    |
+                                      [ Fetch data via ScrapperClient ]
+                                                |
+                                      [ Run Volatility Analysis (LLM) ]
+                                                |
+                                      [ Return Summary + Raw Events ]
+```
 
 ### Components
 
 #### 1. `src/ai/intent_parser.py`
-Main intent parsing module with support for multiple LLM providers.
+Facilitates LLM provider loading and provides the clean `.parse(message, today)` facade.
 
-**Key Classes:**
-- `ParsedIntent` (Pydantic model) - Structured result with intent, sources, start_date, end_date
-- `IntentParserProvider` (ABC) - Abstract base for provider implementations
-- `OllamaIntentParser` - Local LLM support (Qwen, Llama, etc.)
-- `GroqIntentParser` - Groq cloud API support
-- `OpenAIIntentParser` - OpenAI API support
-- `IntentParser` - Main orchestrator (lazy-loads appropriate provider)
+*   `ParsedIntent` (Pydantic model) - Structured representation of intent, sources, start_date, end_date, chat response, confidence, and detected language.
+*   `OllamaIntentParserProvider` - Handles structured output formatting for local Ollama.
+*   `GroqIntentParserProvider` / `OpenAIIntentParserProvider` - Employs native function calling tools (`fetch_economic_data`) for maximum reliability.
 
-**Helper Functions:**
-- `validate_date_range()` - Validates dates and enforces max 7-day limit
+#### 2. Date Boundary Resolution
+The intent system automatically parses relative keywords in the user's prompt into ISO date boundaries relative to the evaluation day:
+*   "today" / "bugün" -> `YYYY-MM-DD` (Today)
+*   "yesterday" / "dün" -> `YYYY-MM-DD` (Yesterday)
+*   "tomorrow" / "yarın" -> `YYYY-MM-DD` (Tomorrow)
+*   "this week" / "bu hafta" -> Monday of this week to Today
+*   "last week" / "geçen hafta" -> Monday of last week to Sunday of last week
+*   "last week Wednesday" -> Specific date matching Wednesday of last week.
 
-#### 2. `src/routes/ai_routes.py` (Updated)
-Chat endpoint (`POST /api/ai/chat`) now uses `IntentParser` for intelligent routing.
+#### 3. Data Source Mapping
+Maps natural currency keywords to scraped bundle sources:
+*   "forex", "döviz", "usd", "eur", "currencies" -> `["forex"]`
+*   "crypto", "kripto", "bitcoin", "solana" -> `["crypto"]`
+*   "metal", "metals", "altın", "gold", "silver" -> `["metal"]`
+*   "energy", "enerji", "petrol", "oil", "gas" -> `["energy"]`
 
-**Flow:**
-1. User sends message
-2. `get_intent_parser()` parses intent via LLM function calling
-3. If intent is "chat" → respond conversationally
-4. If intent is "fetch_data" → extract sources/dates, fetch events, analyze
+---
 
-#### 3. Tool Definition (Function Calling)
-The `fetch_economic_data` tool signature (used by Groq/OpenAI):
-```json
-{
-  "type": "function",
-  "function": {
-    "name": "fetch_economic_data",
-    "description": "Fetch economic calendar data from specified sources and date range",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "sources": {
-          "type": "array",
-          "items": {"type": "string", "enum": ["forex", "cryptocraft", "metalsmine", "energyexch"]}
-        },
-        "start_date": {"type": "string", "description": "YYYY-MM-DD"},
-        "end_date": {"type": "string", "description": "YYYY-MM-DD"}
-      },
-      "required": ["sources", "start_date", "end_date"]
+## 📡 API Usage & Interactive Flow
+
+Because dates and sources are extracted dynamically by the NLU system from the conversation text, client requests do not need to supply static date parameters! This allows for a completely natural conversational UI.
+
+### 1. General Conversation
+*   **Endpoint**: `POST /api/ai/chat`
+*   **Request Payload**:
+    ```json
+    {
+      "message": "Merhaba! Yardımcı olabilir misin?"
     }
-  }
-}
-```
+    ```
+*   **Response** (200 OK):
+    ```json
+    {
+      "reply": "Merhaba! Tabii ki, ekonomik takvim verilerini veya piyasa analizlerini incelemenize yardımcı olabilirim.",
+      "analysis": null,
+      "parsed_intent": {
+        "intent_type": "chat",
+        "chat_response": "Merhaba! Tabii ki...",
+        "confidence": 0.90,
+        "reasoning": "Greeting keyword matched",
+        "language": "tr",
+        "sources": [],
+        "start_date": null,
+        "end_date": null
+      },
+      "provider": "OllamaIntentParserProvider",
+      "events": null
+    }
+    ```
 
-Ollama uses structured output with the same JSON schema.
+### 2. Fetch and Analyze Data Query
+*   **Endpoint**: `POST /api/ai/chat`
+*   **Request Payload**:
+    ```json
+    {
+      "message": "Bugün Forex piyasalarında ne oldu?",
+      "focus": "trading"
+    }
+    ```
+*   **Response** (200 OK):
+    ```json
+    {
+      "reply": "The market sentiment is neutral today following minor USD adjustments...",
+      "analysis": {
+        "summary": "The market sentiment is neutral today...",
+        "analyses": [
+          {
+            "event_name": "FOMC Minutes",
+            "currency": "USD",
+            "time": "2026-05-28 14:00:00",
+            "expectation_vs_previous": "Balanced forecast...",
+            "actual_vs_expectation": "Aligned with expectation...",
+            "market_implication": "USD remains stable...",
+            "sentiment": "neutral",
+            "confidence": "high"
+          }
+        ],
+        "overall_sentiment": "neutral",
+        "key_events": ["FOMC Minutes"],
+        "risk_level": "low"
+      },
+      "parsed_intent": {
+        "intent_type": "fetch_data",
+        "chat_response": null,
+        "confidence": 0.95,
+        "reasoning": "User requested economic calendar data for today",
+        "language": "en",
+        "sources": ["forex"],
+        "start_date": "2026-05-28",
+        "end_date": "2026-05-28"
+      },
+      "provider": "GroqProvider",
+      "events": [
+        {
+          "ID": "1",
+          "Time": "2026-05-28 14:00:00",
+          "Currency": "USD",
+          "Event": "FOMC Minutes",
+          "Forecast": "n/a",
+          "Actual": "n/a",
+          "Previous": "n/a",
+          "Impact": "high"
+        }
+      ]
+    }
+    ```
 
-## Setup & Configuration
+---
 
-### 1. Environment Variables
+## 🔧 Decoupled Fallback Mode
+If your configured LLM API is unavailable, the system automatically falls back to the `SimpleIntentParser` (rule-based keyword parser) without throwing hard exceptions, providing robust offline resiliency.
 
-Choose one LLM provider:
+---
 
-#### Ollama (Local, Self-Hosted)
+## 🧪 Testing Intent NLU Locally
+To run verification suite on parser limits and routing controllers:
 ```bash
-export LLM_PROVIDER=ollama
-export OLLAMA_BASE_URL=http://localhost:11434
-export OLLAMA_MODEL=qwen:7b  # or llama2, neural-chat, etc.
+PYTHONPATH=. .venv/bin/pytest -v
 ```
-
-#### Groq (Cloud)
-```bash
-export LLM_PROVIDER=groq
-export GROQ_API_KEY=gsk_...
-export GROQ_MODEL=mixtral-8x7b-32768  # optional
-```
-
-#### OpenAI (Cloud)
-```bash
-export LLM_PROVIDER=openai
-export OPENAI_API_KEY=sk-...
-export OPENAI_MODEL=gpt-4-turbo-preview  # optional
-```
-
-### 2. Install Dependencies
-
-For Groq/OpenAI support, install the respective libraries:
-
-```bash
-# Groq
-pip install groq>=0.4.1
-
-# OpenAI
-pip install openai>=1.0.0
-
-# Ollama support is built-in (uses requests)
-```
-
-### 3. Start Ollama (if using local)
-
-```bash
-# On macOS (Homebrew)
-brew install ollama
-ollama serve
-
-# In another terminal, pull a model
-ollama pull qwen:7b
-```
-
-Or download from https://ollama.ai
-
-## Usage
-
-### Programmatic (Python)
-
-```python
-from datetime import date
-from src.ai.intent_parser import IntentParser, validate_date_range
-
-# Initialize parser (auto-detects provider from environment)
-parser = IntentParser()
-
-# Parse a user message
-user_message = "Geçen hafta Çarşamba Forex'te ne oldu?"
-parsed_intent = parser.parse(user_message, today=date.today())
-
-print(parsed_intent.intent)       # "fetch_data"
-print(parsed_intent.sources)      # ["forex"]
-print(parsed_intent.start_date)   # "2026-05-21"
-print(parsed_intent.end_date)     # "2026-05-21"
-print(parsed_intent.reasoning)    # "User asked about specific day in past week"
-
-# Validate date range (enforces max 7-day limit)
-start, end, warning = validate_date_range("2026-05-10", "2026-05-30", max_days=7)
-# Returns: ("2026-05-10", "2026-05-17", "Date range (20 days) exceeds limit (7 days)...")
-```
-
-### Via Chat API
-
-```bash
-# General chat (no data fetch)
-curl -X POST http://localhost:5000/api/ai/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Selam! Nasılsın?"}'
-
-# Fetch economic data
-curl -X POST http://localhost:5000/api/ai/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "Bugün önemli Forex verileri açıklandı mı?",
-    "source": "forex"
-  }'
-
-# Override with explicit dates
-curl -X POST http://localhost:5000/api/ai/chat \
-  -H "Content-Type: application/json" \
-  -d '{
-    "message": "Kripto piyasalarında neler oldu?",
-    "source": "cryptocraft",
-    "start_date": "2026-05-23",
-    "end_date": "2026-05-24"
-  }'
-```
-
-## Testing
-
-### Unit Tests (Date Validation)
-
-```bash
-python test_intent_parser.py
-```
-
-Expected output:
-```
-✓ 7-day range OK: 2026-05-20 to 2026-05-27
-✓ Range capped: 2026-05-10 to 2026-05-17
-✓ Correctly rejected: Invalid date format...
-✓ Valid intent: fetch_data
-✓ IntentParser initialized: OllamaIntentParser
-```
-
-### Integration Tests (With Real LLM)
-
-```bash
-# Requires Ollama running (or other LLM provider configured)
-python test_intent_integration.py
-```
-
-This will parse real test messages and display structured results.
-
-## Design Decisions
-
-1. **Multiple Provider Support**: Users can choose local (Ollama) or cloud (Groq/OpenAI) based on needs.
-
-2. **Function Calling via Tool Use**: LLM determines whether to call `fetch_economic_data` tool or respond conversationally. This is more accurate than rule-based parsing.
-
-3. **Date Range Capping**: Maximum 7-day limit prevents excessive scraper calls and API usage.
-
-4. **Lazy Initialization**: Parsers are initialized on first use to avoid startup delays.
-
-5. **Structured Output Schema**: `ParsedIntent` Pydantic model ensures type safety and validation.
-
-6. **Fallback Handling**: If parsing fails, chat endpoint gracefully degrades with helpful message.
-
-## Common Issues & Troubleshooting
-
-### Issue: "Connection refused" on Ollama
-**Solution**: Ensure Ollama is running on the configured URL:
-```bash
-# Check if running
-curl http://localhost:11434/api/tags
-
-# Start if not running
-ollama serve
-```
-
-### Issue: "GROQ_API_KEY required"
-**Solution**: Set environment variable:
-```bash
-export GROQ_API_KEY=gsk_...
-```
-
-### Issue: Long response times with intent parsing
-**Reason**: First request to LLM is slow. Subsequent requests are cached by lazy initialization.
-**Solution**: For production, consider pre-warming the parser on startup.
-
-## Future Enhancements
-
-1. **Streaming Responses**: Return intent parsing results as they arrive (SSE/WebSocket)
-2. **Fallback to Rule-Based**: If LLM unavailable, automatically use simple regex parsing
-3. **Intent Caching**: Cache parsed intents for identical/similar messages
-4. **Custom System Prompts**: Allow fine-tuning of LLM behavior per deployment
-5. **Multi-Provider Failover**: Try Groq, fallback to Ollama if unavailable
-6. **Metrics & Logging**: Track intent accuracy, parsing time, error rates
-
-## Related Files
-
-- **Intent Parsing**: `src/ai/intent_parser.py`
-- **Chat Endpoint**: `src/routes/ai_routes.py` (updated `/api/ai/chat`)
-- **Chat UI**: `src/templates/chat.html` (with localStorage history)
-- **Tests**: `test_intent_parser.py`, `test_intent_integration.py`
-- **OpenAPI Spec**: Updated in `src/openapi_spec.py`

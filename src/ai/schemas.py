@@ -204,8 +204,11 @@ class IntentParsingResult(BaseModel):
     confidence: float = Field(..., description="Confidence score 0.0-1.0")
     reasoning: str = Field(..., description="Brief explanation of classification decision")
     language: str = Field(default="en", description="Detected user language")
-
-    sources: Optional[List[str]] = Field(default_factory=list)
+    sources: Optional[List[str]] = Field(
+        default_factory=list,
+        description="List of economic event types",
+        examples=["forex", "metal", "crypto", "energy"]
+    )
     start_date: Optional[str] = None
     end_date: Optional[str] = None
 

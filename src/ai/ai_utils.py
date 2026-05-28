@@ -150,17 +150,6 @@ def parse_structured_output(result_text: str, logger: Logger) -> EconomicAnalysi
         raise ValueError(f"LLM output schema invalid: {e}")
 
 
-def render_summary_reply(summary: str, key_events: list) -> str:
-    reply = f"{summary}\n\nKey events:\n"
-    if key_events:
-        for k in key_events[:5]:
-            reply += f"- {k}\n"
-    else:
-        reply += "- No critical high-impact events identified for this specific interval.\n"
-
-    return reply
-
-
 def build_intent_system_prompt(current_date: datetime) -> str:
     date_str = current_date.strftime("%Y-%m-%d (%A)")
     yesterday = (current_date - timedelta(days=1)).strftime("%Y-%m-%d")

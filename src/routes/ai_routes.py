@@ -9,7 +9,7 @@ from src.ai.ai_constants import (
     NO_EVENTS_FOUND_RESPONSE_EN,
     SERVER_CONFIG_ERROR_EN,
 )
-from src.ai.ai_utils import validate_date_range, render_summary_reply
+from src.ai.ai_utils import validate_date_range
 from src.ai.analyzer import EconomicAnalyzer
 from src.ai.intent_parser import IntentParser
 from src.ai.schemas import AnalysisRequest

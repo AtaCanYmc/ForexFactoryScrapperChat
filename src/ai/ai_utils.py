@@ -214,6 +214,7 @@ def process_fetch_function_calling_response(response: Any) -> IntentParsingResul
             chat_response=message.content or "",
             confidence=0.90,
             reasoning="No data-fetch intent detected; responding as chat",
+            language='n/a',
         )
     except (json.JSONDecodeError, ValidationError, AttributeError) as exc:
         raise IntentParserException(f"Response processing failed: {exc}") from exc

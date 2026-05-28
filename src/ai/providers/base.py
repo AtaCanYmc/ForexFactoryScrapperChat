@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import Optional
-from src.ai.schemas import EconomicAnalysisResult
+
+from src.ai.ai_constants import LANG_EN
+from src.ai.schemas import EconomicAnalysisResult, IntentParsingResult
 
 
 class LLMProvider(ABC):
@@ -17,3 +20,16 @@ class LLMProvider(ABC):
     ) -> EconomicAnalysisResult:
         """Analyze economic events and return structured result."""
         pass
+
+
+class IntentParserProvider(ABC):
+    """Contract every LLM provider must implement."""
+
+    @abstractmethod
+    def parse_intent(
+            self,
+            user_query: str,
+            current_date: datetime,
+            language: str = LANG_EN,
+    ) -> IntentParsingResult:
+        """Parse user intent from free-form query and return structured result."""

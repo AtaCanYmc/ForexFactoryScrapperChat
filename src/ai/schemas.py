@@ -2,9 +2,17 @@
 
 Uses Structured Output pattern for reliable JSON parsing from LLMs.
 """
-
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Optional, Any
 from pydantic import BaseModel, Field, ConfigDict
+
+from src.ai.ai_constants import LANG_EN, SUPPORTED_SOURCES, MAX_DATE_RANGE_DAYS
+from src.ai.exceptions import InvalidDateRangeException, DateRangeExceededException
+
+
+# ============================================================================
+# Analysis
+# ============================================================================
 
 
 class EconomicEvent(BaseModel):
@@ -153,3 +161,61 @@ class AnalysisRequest(BaseModel):
             }
         }
     )
+
+
+# ============================================================================
+# Intent
+# ============================================================================
+
+class FetchEconomicDataParams(BaseModel):
+    """Parameters extracted by the LLM for the ``fetch_economic_data`` tool."""
+    sources: List[str] = Field(...,
+                               description=f"Data sources to fetch from. Valid values: {', '.join(SUPPORTED_SOURCES)}")
+    start_date: str = Field(..., description="Start date in YYYY-MM-DD format")
+    end_date: str = Field(..., description="End date in YYYY-MM-DD format")
+    language: str = Field(default=LANG_EN, description="Detected user language")
+
+    def validate_sources(self) -> None:
+        invalid = set(self.sources) - set(SUPPORTED_SOURCES)
+        if invalid:
+            raise ValueError(f"Invalid sources: {invalid}. Supported: {SUPPORTED_SOURCES}")
+
+    def validate_dates(self) -> None:
+        try:
+            start = datetime.strptime(self.start_date, "%Y-%m-%d")
+            end = datetime.strptime(self.end_date, "%Y-%m-%d")
+        except ValueError as exc:
+            raise InvalidDateRangeException(f"Invalid date format (expected YYYY-MM-DD): {exc}") from exc
+
+        if start > end:
+            raise InvalidDateRangeException(f"start_date ({self.start_date}) must be ≤ end_date ({self.end_date})")
+
+        span = (end - start).days
+        if span > MAX_DATE_RANGE_DAYS:
+            raise DateRangeExceededException(f"Date range ({span} days) exceeds maximum ({MAX_DATE_RANGE_DAYS} days).")
+
+
+class IntentParsingResult(BaseModel):
+    """Structured result of intent parsing."""
+    intent_type: str = Field(..., description="'fetch_data' for data queries, 'chat' for general conversation")
+    intent: Optional[str] = Field(None, description="Alias kept for backward-compat")
+    fetch_params: Optional[FetchEconomicDataParams] = Field(None, description="Extracted params")
+    chat_response: Optional[str] = Field(None, description="Direct chat response")
+    confidence: float = Field(..., description="Confidence score 0.0-1.0")
+    reasoning: str = Field(..., description="Brief explanation of classification decision")
+    language: str = Field(default="en", description="Detected user language")
+
+    sources: Optional[List[str]] = Field(default_factory=list)
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.intent:
+            self.intent = self.intent_type
+        if self.fetch_params:
+            self.sources = self.fetch_params.sources
+            self.start_date = self.fetch_params.start_date
+            self.end_date = self.fetch_params.end_date
+
+
+ParsedIntent = IntentParsingResult

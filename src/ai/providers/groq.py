@@ -1,8 +1,13 @@
 import logging
+from datetime import datetime
 from typing import Optional
-from src.ai.providers.base import LLMProvider
-from src.ai.schemas import EconomicAnalysisResult
-from src.ai.ai_utils import render_analysis_system_prompt, render_analysis_prompt, parse_structured_output
+from src.ai.ai_constants import LANG_EN
+from src.ai.exceptions import IntentParserException
+from src.ai.intent.tool_defs import get_fetch_economic_data_tool_definition
+from src.ai.providers.base import LLMProvider, IntentParserProvider
+from src.ai.schemas import EconomicAnalysisResult, IntentParsingResult
+from src.ai.ai_utils import render_analysis_system_prompt, render_analysis_prompt, parse_structured_output, \
+    process_fetch_function_calling_response, build_intent_system_prompt, build_intent_user_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -72,3 +77,51 @@ class GroqProvider(LLMProvider):
         except Exception as e:
             logger.error(f"Groq analysis failed: {e}")
             raise
+
+
+class GroqIntentParserProvider(IntentParserProvider):
+    """Uses Groq cloud API with native ``tools`` / function-calling."""
+
+    def __init__(self, api_key: str, model: str = "mixtral-8x7b-32768") -> None:
+        self.api_key = api_key
+        self.model = model
+
+        try:
+            from groq import Groq
+
+            self.client = Groq(api_key=api_key)
+        except ImportError as exc:
+            raise ImportError(
+                "groq library required for GroqIntentParserProvider"
+            ) from exc
+
+    def parse_intent(
+            self,
+            user_query: str,
+            current_date: datetime,
+            language: str = LANG_EN,
+    ) -> IntentParsingResult:
+        system_prompt = build_intent_system_prompt(current_date)
+        user_prompt = build_intent_user_prompt(user_query)
+        tools = [get_fetch_economic_data_tool_definition()]
+
+        try:
+            messages_payload = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages_payload,  # type: ignore
+                tools=tools,  # type: ignore
+                tool_choice="auto",
+                temperature=0.3,
+                timeout=30,
+            )
+            return process_fetch_function_calling_response(response)
+        except IntentParserException:
+            raise
+        except Exception as exc:
+            logger.error("Groq intent parsing failed: %s", exc)
+            raise IntentParserException(f"Intent parsing failed: {exc}") from exc

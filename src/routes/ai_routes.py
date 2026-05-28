@@ -9,10 +9,10 @@ from src.ai.ai_constants import (
     NO_EVENTS_FOUND_RESPONSE_EN,
     SERVER_CONFIG_ERROR_EN,
 )
-from src.ai.ai_utils import normalize_sources, fetch_events, validate_date_range
+from src.ai.ai_utils import normalize_sources, validate_date_range
 from src.ai.analyzer import EconomicAnalyzer
-from src.ai.schemas import AnalysisRequest
 from src.ai.intent_parser import IntentParser
+from src.ai.schemas import AnalysisRequest
 
 logger = logging.getLogger(__name__)
 

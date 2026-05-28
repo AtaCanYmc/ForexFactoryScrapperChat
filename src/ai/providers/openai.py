@@ -1,8 +1,13 @@
 import logging
+from datetime import datetime
 from typing import Optional
-from src.ai.providers.base import LLMProvider
-from src.ai.schemas import EconomicAnalysisResult
-from src.ai.ai_utils import render_analysis_system_prompt, render_analysis_prompt, parse_structured_output
+from src.ai.ai_constants import LANG_EN
+from src.ai.exceptions import IntentParserException
+from src.ai.intent.tool_defs import get_fetch_economic_data_tool_definition
+from src.ai.providers.base import LLMProvider, IntentParserProvider
+from src.ai.schemas import EconomicAnalysisResult, IntentParsingResult
+from src.ai.ai_utils import render_analysis_system_prompt, render_analysis_prompt, parse_structured_output, \
+    process_fetch_function_calling_response, build_intent_system_prompt, build_intent_user_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -68,3 +73,49 @@ class OpenAIProvider(LLMProvider):
         except Exception as e:
             logger.error(f"OpenAI analysis failed: {e}")
             raise
+
+
+class OpenAIIntentParserProvider(IntentParserProvider):
+    """Uses OpenAI API with native ``tools`` / function-calling."""
+
+    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview") -> None:
+        self.api_key = api_key
+        self.model = model
+
+        try:
+            from openai import OpenAI
+
+            self.client = OpenAI(api_key=api_key)
+        except ImportError as exc:
+            raise ImportError(
+                "openai library required for OpenAIIntentParserProvider"
+            ) from exc
+
+    def parse_intent(
+            self,
+            user_query: str,
+            current_date: datetime,
+            language: str = LANG_EN,
+    ) -> IntentParsingResult:
+        system_prompt = build_intent_system_prompt(current_date)
+        user_prompt = build_intent_user_prompt(user_query)
+        tools = [get_fetch_economic_data_tool_definition()]
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                tools=tools,
+                tool_choice="auto",
+                temperature=0.3,
+                timeout=30,
+            )
+            return process_fetch_function_calling_response(response)
+        except IntentParserException:
+            raise
+        except Exception as exc:
+            logger.error("OpenAI intent parsing failed: %s", exc)
+            raise IntentParserException(f"Intent parsing failed: {exc}") from exc

@@ -2,19 +2,20 @@ import os
 from datetime import timedelta, datetime
 from logging import Logger
 from jinja2 import Environment, FileSystemLoader
-from src.ai.ai_constants import MAX_DATE_RANGE_DAYS
-from src.ai.schemas import EconomicAnalysisResult
+from src.ai.ai_constants import MAX_DATE_RANGE_DAYS, SUPPORTED_LANGUAGES
+from src.ai.exceptions import IntentParserException
+from src.ai.schemas import EconomicAnalysisResult, IntentParsingResult, FetchEconomicDataParams
 import inspect
 import json
 from datetime import date
-from typing import Optional
+from typing import Optional, Any
 from pydantic import ValidationError
 
 
 def validate_date_range(
-    start_str: Optional[str],
-    end_str: Optional[str],
-    max_days: int = MAX_DATE_RANGE_DAYS,
+        start_str: Optional[str],
+        end_str: Optional[str],
+        max_days: int = MAX_DATE_RANGE_DAYS,
 ) -> tuple[date, date, Optional[str]]:
     """Validate and clamp a pair of date strings.
 
@@ -83,46 +84,14 @@ def normalize_sources(sources: list) -> list:
     return normalized
 
 
-def fetch_events(site_map, sources, resolve_helpers, start_date, end_date, logger):
-    """Fetch events from specified sources and date range."""
-    all_events = []
-
-    for source in sources:
-        site_module = site_map.get(source)
-        if not site_module:
-            logger.warning(f"Unknown source: {source}")
-            continue
-
-        try:
-            get_records, get_url = resolve_helpers(site_module)
-            cur = start_date
-            while cur <= end_date:
-                url = get_url(cur.day, cur.month, cur.year, "day")
-                recs = get_records(url)
-                if isinstance(recs, list):
-                    all_events.extend(recs)
-                elif (
-                    isinstance(recs, dict)
-                    and "results" in recs
-                    and isinstance(recs["results"], list)
-                ):
-                    all_events.extend(recs["results"])
-                cur = cur + timedelta(days=1)
-        except Exception as e:
-            logger.exception(f"Failed to fetch events from {source}: {e}")
-            continue
-
-    return all_events
-
-
 def render_analysis_prompt(
-    *,
-    events_data: list,
-    language: str = "en",
-    focus: Optional[str] = None,
-    example_count: int = 0,
-    response_style: Optional[str] = None,
-    template_name: str = "analysis_prompt.jinja2",
+        *,
+        events_data: list,
+        language: str = "en",
+        focus: Optional[str] = None,
+        example_count: int = 0,
+        response_style: Optional[str] = None,
+        template_name: str = "analysis_prompt.jinja2",
 ) -> str:
     """Render the analysis prompt using the Jinja2 template.
 
@@ -149,9 +118,9 @@ def render_analysis_prompt(
 
 
 def render_analysis_system_prompt(
-    *,
-    language: str = "en",
-    template_name: str = "analysis_system_prompt.jinja2",
+        *,
+        language: str = "en",
+        template_name: str = "analysis_system_prompt.jinja2",
 ) -> str:
     """Render the system prompt using the Jinja2 template for analysis.
 
@@ -198,3 +167,69 @@ def parse_structured_output(result_text: str, logger: Logger) -> EconomicAnalysi
     except ValidationError as e:
         logger.error(f"LLM output failed schema validation: {e}")
         raise ValueError(f"LLM output schema invalid: {e}")
+
+
+def build_intent_system_prompt(current_date: datetime) -> str:
+    date_str = current_date.strftime("%Y-%m-%d (%A)")
+    yesterday = (current_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    tomorrow = (current_date + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    monday_offset = current_date.weekday()
+    this_monday = (current_date - timedelta(days=monday_offset)).strftime("%Y-%m-%d")
+    last_monday = (current_date - timedelta(days=monday_offset + 7)).strftime("%Y-%m-%d")
+    last_sunday = (current_date - timedelta(days=monday_offset + 1)).strftime("%Y-%m-%d")
+
+    templates_dir = os.path.join(os.path.dirname(__file__), "prompts/intent")
+    env = Environment(loader=FileSystemLoader(templates_dir), autoescape=False)
+    template = env.get_template("intent_system_prompt.jinja2")
+
+    return template.render(
+        date_str=date_str, yesterday=yesterday, tomorrow=tomorrow,
+        this_monday=this_monday, last_monday=last_monday, last_sunday=last_sunday,
+        supported_languages=str(SUPPORTED_LANGUAGES),
+    )
+
+
+def build_intent_user_prompt(user_query: str) -> str:
+    return (
+        f"User Query: {user_query.strip()}\n\n"
+        "Analyze the query above, determine the intent, detect the query language, "
+        "and invoke the fetch_economic_data tool if necessary."
+    )
+
+
+def process_fetch_function_calling_response(response: Any) -> IntentParsingResult:
+    """Process an OpenAI-compatible chat completion that may contain tool_calls.
+
+    If the model invoked ``fetch_economic_data``, build a ``fetch_data`` result.
+    Otherwise, treat the reply as general chat.
+    """
+    try:
+        message = response.choices[0].message
+
+        if message.tool_calls:
+            tool_call = message.tool_calls[0]
+            if tool_call.function.name == "fetch_economic_data":
+                params_dict = json.loads(tool_call.function.arguments)
+                fetch_params = FetchEconomicDataParams(**params_dict)
+                fetch_params.validate_sources()
+                fetch_params.validate_dates()
+
+                return IntentParsingResult(
+                    intent_type="fetch_data",
+                    fetch_params=fetch_params,
+                    chat_response=None,
+                    confidence=0.95,
+                    reasoning="LLM invoked fetch_economic_data function call",
+                )
+
+        # No tool call → general chat
+        return IntentParsingResult(
+            intent_type="chat",
+            fetch_params=None,
+            chat_response=message.content or "",
+            confidence=0.90,
+            reasoning="No data-fetch intent detected; responding as chat",
+        )
+    except (json.JSONDecodeError, ValidationError, AttributeError) as exc:
+        raise IntentParserException(f"Response processing failed: {exc}") from exc

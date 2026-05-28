@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from src.ai.exceptions import IntentParserException
 from src.ai.providers.base import LLMProvider, IntentParserProvider
 from src.ai.schemas import EconomicAnalysisResult, IntentParsingResult
-from src.ai.ai_utils import render_analysis_prompt, parse_structured_output, build_intent_system_prompt, \
+from src.ai.ai_utils import render_analysis_user_prompt, parse_structured_output, build_intent_system_prompt, \
     build_intent_user_prompt
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class OllamaProvider(LLMProvider):
         """Analyze events using local Ollama model."""
         try:
             # Render prompt from shared template; allow optional style/examples
-            prompt = render_analysis_prompt(
+            prompt = render_analysis_user_prompt(
                 events_data=events_data,
                 language=language,
                 focus=focus,
@@ -80,7 +80,7 @@ class OllamaProvider(LLMProvider):
     ) -> str:
         """Build analysis prompt for the LLM."""
         # Delegate to shared renderer with defaults for example_count and response_style
-        return render_analysis_prompt(
+        return render_analysis_user_prompt(
             events_data=events_data,
             language=language,
             focus=focus,

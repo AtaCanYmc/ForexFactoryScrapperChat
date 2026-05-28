@@ -5,7 +5,7 @@ from src.ai.exceptions import IntentParserException
 from src.ai.intent.tool_defs import get_fetch_economic_data_tool_definition
 from src.ai.providers.base import LLMProvider, IntentParserProvider
 from src.ai.schemas import EconomicAnalysisResult, IntentParsingResult
-from src.ai.ai_utils import render_analysis_system_prompt, render_analysis_prompt, parse_structured_output, \
+from src.ai.ai_utils import render_analysis_system_prompt, render_analysis_user_prompt, parse_structured_output, \
     process_fetch_function_calling_response, build_intent_system_prompt, build_intent_user_prompt
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ class GroqProvider(LLMProvider):
         try:
             system_prompt = render_analysis_system_prompt(language=language)
             # Use shared renderer; pass example_count/response_style through
-            user_prompt = render_analysis_prompt(
+            user_prompt = render_analysis_user_prompt(
                 events_data=events_data,
                 language=language,
                 focus=focus,

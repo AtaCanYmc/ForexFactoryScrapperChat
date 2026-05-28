@@ -65,14 +65,14 @@ def validate_date_range(
     return start, end, warning
 
 
-def render_analysis_prompt(
+def render_analysis_user_prompt(
         *,
         events_data: list,
         language: str,
         focus: Optional[str] = None,
         example_count: int = 0,
         response_style: Optional[str] = None,
-        template_name: str = "analysis_prompt.jinja2",
+        template_name: str = "analysis_user_prompt.jinja2",
 ) -> str:
     """Render the analysis prompt using the Jinja2 template.
 

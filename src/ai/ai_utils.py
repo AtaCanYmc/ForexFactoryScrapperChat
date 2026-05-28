@@ -65,29 +65,10 @@ def validate_date_range(
     return start, end, warning
 
 
-def normalize_sources(sources: list) -> list:
-    """Normalize source names to match our internal identifiers."""
-    if not sources:
-        return ["forex"]
-
-    normalized = []
-    for src in sources:
-        src_lower = src.lower()
-        if src_lower in ("crypto", "kripto"):
-            normalized.append("crypto")
-        elif src_lower in ("metals", "metal", "altın"):
-            normalized.append("metal")
-        elif src_lower in ("energy", "enerji"):
-            normalized.append("energy")
-        else:
-            normalized.append(src_lower)
-    return normalized
-
-
 def render_analysis_prompt(
         *,
         events_data: list,
-        language: str = "en",
+        language: str,
         focus: Optional[str] = None,
         example_count: int = 0,
         response_style: Optional[str] = None,
@@ -119,7 +100,7 @@ def render_analysis_prompt(
 
 def render_analysis_system_prompt(
         *,
-        language: str = "en",
+        language: str,
         template_name: str = "analysis_system_prompt.jinja2",
 ) -> str:
     """Render the system prompt using the Jinja2 template for analysis.
@@ -167,6 +148,17 @@ def parse_structured_output(result_text: str, logger: Logger) -> EconomicAnalysi
     except ValidationError as e:
         logger.error(f"LLM output failed schema validation: {e}")
         raise ValueError(f"LLM output schema invalid: {e}")
+
+
+def render_summary_reply(summary: str, key_events: list) -> str:
+    reply = f"{summary}\n\nKey events:\n"
+    if key_events:
+        for k in key_events[:5]:
+            reply += f"- {k}\n"
+    else:
+        reply += "- No critical high-impact events identified for this specific interval.\n"
+
+    return reply
 
 
 def build_intent_system_prompt(current_date: datetime) -> str:

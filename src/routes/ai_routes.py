@@ -9,7 +9,7 @@ from src.ai.ai_constants import (
     NO_EVENTS_FOUND_RESPONSE_EN,
     SERVER_CONFIG_ERROR_EN,
 )
-from src.ai.ai_utils import normalize_sources, validate_date_range
+from src.ai.ai_utils import validate_date_range, render_summary_reply
 from src.ai.analyzer import EconomicAnalyzer
 from src.ai.intent_parser import IntentParser
 from src.ai.schemas import AnalysisRequest
@@ -65,6 +65,18 @@ def get_api_client():
     return _api_client
 
 
+@ai_bp.route("/api/ai/health", methods=["GET"])
+def health():
+    """Health check for AI analyzer."""
+    try:
+        analyzer = get_analyzer()
+        provider_type = type(analyzer.provider).__name__
+        return jsonify({"status": "ok", "provider": provider_type, "ready": True}), 200
+    except Exception as e:
+        logger.warning(f"Health check failed: {e}")
+        return jsonify({"status": "error", "error": str(e), "ready": False}), 503
+
+
 @ai_bp.route("/api/ai/analyze", methods=["POST"])
 def analyze_events():
     """Analyze economic events using LLM."""
@@ -74,6 +86,7 @@ def analyze_events():
             return jsonify({"error": "Request body must be valid JSON"}), 400
 
         analysis_request = AnalysisRequest(**data)
+        logger.info(f"Received analysis request: {analysis_request}")
 
     except ValueError as e:
         logger.warning(f"Invalid request: {e}")
@@ -113,7 +126,9 @@ def analyze_events():
     try:
         analyzer = get_analyzer()
         result = analyzer.analyze(
-            analysis_request, example_count=example_count, response_style=response_style
+            request=analysis_request,
+            example_count=example_count,
+            response_style=response_style
         )
         return jsonify(result.model_dump()), 200
 
@@ -133,18 +148,6 @@ def analyze_events():
         )
 
 
-@ai_bp.route("/api/ai/health", methods=["GET"])
-def health():
-    """Health check for AI analyzer."""
-    try:
-        analyzer = get_analyzer()
-        provider_type = type(analyzer.provider).__name__
-        return jsonify({"status": "ok", "provider": provider_type, "ready": True}), 200
-    except Exception as e:
-        logger.warning(f"Health check failed: {e}")
-        return jsonify({"status": "error", "error": str(e), "ready": False}), 503
-
-
 @ai_bp.route("/api/ai/chat", methods=["POST"])
 def chat():
     """Chat-style endpoint that integrates intent parsing, scraping, and evaluation."""
@@ -157,10 +160,6 @@ def chat():
         return jsonify({"error": "Request must be valid JSON"}), 400
 
     message = data.get("message")
-    explicit_source = data.get("source")
-    explicit_start = data.get("start_date")
-    explicit_end = data.get("end_date")
-
     if not message or not isinstance(message, str):
         return jsonify({"error": "'message' field required and must be a string"}), 400
 
@@ -174,39 +173,30 @@ def chat():
 
     # Handle general conversation intent
     if parsed_intent.intent == "chat":
-        return (
-            jsonify(
-                {
-                    "reply": parsed_intent.chat_response,
-                    "analysis": None,
-                }
-            ),
-            200,
-        )
-
-    # Apply intent overrides if explicitly passed via request body
-    if explicit_source:
-        parsed_intent.sources = [explicit_source]
-    if explicit_start:
-        parsed_intent.start_date = explicit_start
-    if explicit_end:
-        parsed_intent.end_date = explicit_end
+        logger.info(f"Chat intent: {parsed_intent}")
+        return jsonify({
+            "reply": parsed_intent.chat_response or ("Let's chat!"
+                                                     " How can I assist you with economic events today?"),
+            "analysis": None,
+        }), 200
 
     # Date range formatting and boundary constraints
     try:
         start_date, end_date, warning = validate_date_range(
-            parsed_intent.start_date, parsed_intent.end_date, max_days=7
+            parsed_intent.start_date,
+            parsed_intent.end_date,
+            max_days=7
         )
         if warning:
-            logger.warning(f"Date range adjusted: {warning}")
+            logger.warning(f"Date range warning: {warning}")
     except ValueError as e:
+        logger.exception(f"Date range validation failed: {e}")
         return jsonify({"error": str(e)}), 400
 
     if not start_date or not end_date:
         start_date = end_date = date.today()
 
     sources = parsed_intent.sources if parsed_intent.sources else ["forex"]
-    normalized_sources = normalize_sources(sources)
 
     try:
         client = get_api_client()
@@ -214,7 +204,7 @@ def chat():
         # We can adjust this as needed
         max_event_limit = 50
         all_events = client.fetch_economic_data_bundle(
-            sources=normalized_sources,
+            sources=sources,
             start_date=start_date.isoformat(),
             end_date=end_date.isoformat(),
             limit=max_event_limit,
@@ -225,17 +215,21 @@ def chat():
         return jsonify(SERVER_CONFIG_ERROR_EN), 500
 
     if not all_events or len(all_events) == 0:
+        logger.exception(f"No events found for {start_date} to {end_date}")
         return jsonify(NO_EVENTS_FOUND_RESPONSE_EN), 200
 
     # Build evaluation and response structured block
     try:
-        analysis_payload = {"events": all_events, "language": parsed_intent.language}
+        analysis_payload = {
+            "events": all_events,
+            "language": parsed_intent.language
+        }
         if data.get("focus"):
             analysis_payload["focus"] = data.get("focus")
         example_count = int(data.get("example_count", 0) or 0)
         response_style = data.get("response_style")
-
         analysis_request = AnalysisRequest(**analysis_payload)
+        logger.info(f"Analysis request created: {analysis_request}")
     except Exception as e:
         logger.warning(f"Invalid analysis payload: {e}")
         return jsonify({"error": f"Invalid analysis payload: {e}"}), 400
@@ -243,14 +237,14 @@ def chat():
     try:
         analyzer = get_analyzer()
         result = analyzer.analyze(
-            analysis_request, example_count=example_count, response_style=response_style
+            request=analysis_request,
+            example_count=example_count,
+            response_style=response_style
         )
         summary = result.summary
-        key_events = result.key_events if hasattr(result, "key_events") else []
-        reply = f"{summary}\n\nKey events:\n"
-        for k in key_events[:5]:
-            reply += f"- {k}\n"
-
+        key_events = result.key_events if result.key_events else []
+        reply = render_summary_reply(summary=summary, key_events=key_events)
+        logger.info(f"Analysis result: {result.model_dump()}")
         return jsonify({"reply": reply, "analysis": result.model_dump()}), 200
 
     except ValueError as e:

@@ -6,7 +6,6 @@ from datetime import date
 
 from src.ai.ai_constants import (
     FAILED_ANALYZE_CONVERSATION_RESPONSE_EN,
-    SITE_MAP,
     NO_EVENTS_FOUND_RESPONSE_EN,
     SERVER_CONFIG_ERROR_EN,
 )
@@ -22,6 +21,7 @@ ai_bp = Blueprint("ai", __name__)
 # Global instances for lazy-loading
 _analyzer = None
 _intent_parser = None
+_api_client = None
 
 
 def get_analyzer():
@@ -48,6 +48,21 @@ def get_intent_parser():
             logger.error(f"Failed to initialize intent parser: {e}")
             raise
     return _intent_parser
+
+
+def get_api_client():
+    """Get or initialize the API client (lazy loading)."""
+    global _api_client
+    if _api_client is None:
+        try:
+            from src.client.scrapper_api_client import ScrapperAPIClient
+
+            _api_client = ScrapperAPIClient()
+            logger.info("API client initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize API client: {e}")
+            raise
+    return _api_client
 
 
 @ai_bp.route("/api/ai/analyze", methods=["POST"])
@@ -87,8 +102,8 @@ def analyze_events():
                 jsonify(
                     {
                         "error": (
-                            "Invalid response_style. Allowed values: "
-                            + ", ".join(sorted(allowed_styles))
+                                "Invalid response_style. Allowed values: "
+                                + ", ".join(sorted(allowed_styles))
                         )
                     }
                 ),
@@ -194,16 +209,22 @@ def chat():
     normalized_sources = normalize_sources(sources)
 
     try:
-        from .common_helpers import _resolve_helpers
+        client = get_api_client()
+        # LLM Token budget consideration for analysis
+        # We can adjust this as needed
+        max_event_limit = 50
+        all_events = client.fetch_economic_data_bundle(
+            sources=sources,
+            start_date=start_date.isoformat(),
+            end_date=end_date.isoformat(),
+            limit=max_event_limit,
+            offset=0
+        )
     except Exception as e:
-        logger.exception(f"Failed to resolve scraper helpers for chat source: {e}")
+        logger.exception(f"Failed to fetch events from API client: {e}")
         return jsonify(SERVER_CONFIG_ERROR_EN), 500
 
-    all_events = fetch_events(
-        SITE_MAP, normalized_sources, _resolve_helpers, start_date, end_date, logger
-    )
-
-    if not all_events:
+    if not all_events or len(all_events) == 0:
         return jsonify(NO_EVENTS_FOUND_RESPONSE_EN), 200
 
     # Build evaluation and response structured block

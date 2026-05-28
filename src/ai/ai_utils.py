@@ -133,7 +133,7 @@ def render_analysis_prompt(
     lang_instruction = "English" if language == "en" else language.capitalize()
     events_json = json.dumps(events_data, indent=2)
 
-    templates_dir = os.path.join(os.path.dirname(__file__), "prompts")
+    templates_dir = os.path.join(os.path.dirname(__file__), "prompts/analysis")
     env = Environment(loader=FileSystemLoader(templates_dir), autoescape=False)
     template = env.get_template(template_name)
 
@@ -160,7 +160,7 @@ def render_analysis_system_prompt(
     """
     lang_instruction = "English" if language == "en" else language.capitalize()
 
-    templates_dir = os.path.join(os.path.dirname(__file__), "prompts")
+    templates_dir = os.path.join(os.path.dirname(__file__), "prompts/analysis")
     env = Environment(loader=FileSystemLoader(templates_dir), autoescape=False)
     template = env.get_template(template_name)
 

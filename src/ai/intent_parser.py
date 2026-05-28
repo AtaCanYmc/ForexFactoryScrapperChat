@@ -242,7 +242,7 @@ def build_system_prompt(current_date: datetime) -> str:
         "%Y-%m-%d"
     )
 
-    templates_dir = os.path.join(os.path.dirname(__file__), "prompts")
+    templates_dir = os.path.join(os.path.dirname(__file__), "prompts/intent")
     env = Environment(loader=FileSystemLoader(templates_dir), autoescape=False)
     template = env.get_template("intent_system_prompt.jinja2")
 

@@ -3,13 +3,6 @@ from typing import List
 LANG_TR = "tr"
 LANG_EN = "en"
 
-SITE_MAP = {
-    "forex": "src.scrapper.forexFactoryScrapper",
-    "cryptocraft": "src.scrapper.cryptoCraftScrapper",
-    "metalsmine": "src.scrapper.metalsMineScrapper",
-    "energyexch": "src.scrapper.energyExchExchScrapper",
-}
-
 FAILED_ANALYZE_CONVERSATION_RESPONSE_EN = {
     "reply": "I'm sorry, I didn't understand your request. Please try again.",
     "analysis": None,

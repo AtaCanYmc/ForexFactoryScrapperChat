@@ -218,7 +218,6 @@ def chat():
         logger.exception(f"No events found for {start_date} to {end_date}")
         return jsonify(NO_EVENTS_FOUND_RESPONSE_EN), 200
 
-    # Build evaluation and response structured block
     try:
         analysis_payload = {
             "events": all_events,
@@ -241,23 +240,18 @@ def chat():
             example_count=example_count,
             response_style=response_style
         )
-        summary = result.summary
-        key_events = result.key_events if result.key_events else []
-        reply = render_summary_reply(summary=summary, key_events=key_events)
         logger.info(f"Analysis result: {result.model_dump()}")
-        return jsonify({"reply": reply, "analysis": result.model_dump()}), 200
+        return jsonify({
+            "reply": result.summary,
+            "analysis": result.model_dump()
+        }), 200
 
     except ValueError as e:
         logger.warning(f"Analysis validation error: {e}")
         return jsonify({"error": f"Analysis failed: {str(e)}"}), 400
     except Exception as e:
         logger.exception(f"Unexpected error during chat analysis: {e}")
-        return (
-            jsonify(
-                {
-                    "error": "Analysis failed due to server error",
-                    "detail": str(e) if logger.level == logging.DEBUG else None,
-                }
-            ),
-            500,
-        )
+        return jsonify({
+            "error": "Analysis failed due to server error",
+            "detail": str(e) if logger.level == logging.DEBUG else None,
+        }), 500

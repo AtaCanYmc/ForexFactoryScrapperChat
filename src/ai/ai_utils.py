@@ -208,15 +208,18 @@ def process_fetch_function_calling_response(response: Any) -> IntentParsingResul
                 fetch_params.validate_dates()
 
                 return IntentParsingResult(
+                    intent="fetch_data",
                     intent_type="fetch_data",
                     fetch_params=fetch_params,
                     chat_response=None,
                     confidence=0.95,
                     reasoning="LLM invoked fetch_economic_data function call",
+                    language=fetch_params.language
                 )
 
         # No tool call → general chat
         return IntentParsingResult(
+            intent="chat",
             intent_type="chat",
             fetch_params=None,
             chat_response=message.content or "",

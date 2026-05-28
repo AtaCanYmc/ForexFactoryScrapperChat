@@ -1,5 +1,10 @@
 # ForexFactoryScrapper LLM Chat
 
+[![CI Pipeline](https://github.com/AtaCanYmc/ForexFactoryScrapperChat/actions/workflows/ci.yml/badge.svg)](https://github.com/AtaCanYmc/ForexFactoryScrapperChat/actions)
+![Python Version](https://img.shields.io/badge/python-3.11-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Flask](https://img.shields.io/badge/flask-3.1.3-orange.svg)
+
 An institutional-grade, AI-powered conversational assistant and economic event analyzer. This system combines real-time data scraping pipelines (covering forex, cryptocurrencies, metals, and energy) with state-of-the-art Large Language Models (LLMs) to deliver structured, action-oriented financial analysis directly to traders and investors.
 
 ---
@@ -86,6 +91,22 @@ LLM_PROVIDER=openai
 OPENAI_API_KEY=sk-proj-your_openai_api_key
 OPENAI_MODEL=gpt-4-turbo-preview
 ```
+
+---
+
+## 📦 Required External Dependency
+
+This application acts as a decoupled NLU intelligence layer and **requires** the backend scraper engine to be running as a separate service. 
+
+You must set up and run the following repository:
+👉 **[ForexFactoryScrapper Engine](https://github.com/AtaCanYmc/ForexFactoryScrapper)**
+
+1. Clone and install the scraper repository on your local system or server.
+2. Run the scraper engine on its designated port (typically `http://127.0.0.1:5000` or customized).
+3. Provide the scraper API base URL in this project's `.env` configuration file via the `FF_SCRAPPER_API_BASE_URL` parameter:
+   ```env
+   FF_SCRAPPER_API_BASE_URL=http://127.0.0.1:5000
+   ```
 
 ---
 
@@ -198,3 +219,9 @@ To launch the app with a companion containerized local Ollama server, use `docke
 docker-compose up --build
 ```
 This starts both the Flask application and the Ollama instance in the same virtual network, allowing secure, fast local inference.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License. See the [LICENSE](file:///Users/atacan/ata-codes/ForexFactoryScrapperChat/LICENSE) file for details.

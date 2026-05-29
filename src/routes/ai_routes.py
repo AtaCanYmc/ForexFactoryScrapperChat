@@ -165,13 +165,15 @@ def chat():
         return jsonify({"error": "Request must be valid JSON"}), 400
 
     history = data.get("history", [])
+    clean_history = [m for m in history if m.get("role") in ("user", "bot", "assistant")]
+
     message = data.get("message")
     if not message or not isinstance(message, str):
         return jsonify({"error": "'message' field required and must be a string"}), 400
 
     try:
         parser = get_intent_parser()
-        parsed_intent = parser.parse(message, today=date.today(), history=history)
+        parsed_intent = parser.parse(message, today=date.today(), history=clean_history)
         logger.info(f"Parsed intent: {parsed_intent}")
     except Exception as e:
         logger.warning(f"Intent parsing failed, falling back to chat: {e}")
@@ -231,7 +233,7 @@ def chat():
         analysis_payload = {
             "events": all_events,
             "language": parsed_intent.language,
-            "history": history,
+            "history": clean_history,
         }
         if data.get("focus"):
             analysis_payload["focus"] = data.get("focus")

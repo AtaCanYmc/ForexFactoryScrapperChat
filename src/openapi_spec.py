@@ -113,7 +113,8 @@ OPENAPI_SPEC = {
                             "schema": {
                                 "type": "object",
                                 "properties": {
-                                    "message": {"type": "string", "description": "Conversational question or prompt about economic data"},
+                                    "message": {"type": "string",
+                                                "description": "Conversational question or prompt about economic data"},
                                     "focus": {"type": ["string", "null"], "description": "Optional analysis focus"},
                                     "example_count": {"type": "integer", "minimum": 0, "default": 0},
                                     "response_style": {
@@ -126,6 +127,12 @@ OPENAPI_SPEC = {
                                             "balanced",
                                         ],
                                     },
+                                    "history": {
+                                        "type": "array",
+                                        "items": {"type": "object"},
+                                        "description": "Recent chat history turns for conversation context",
+                                        "default": []
+                                    }
                                 },
                                 "required": ["message"],
                             }

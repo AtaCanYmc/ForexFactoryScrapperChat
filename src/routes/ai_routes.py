@@ -171,7 +171,7 @@ def chat():
 
     try:
         parser = get_intent_parser()
-        parsed_intent = parser.parse(message, today=date.today())
+        parsed_intent = parser.parse(message, today=date.today(), history=history)
         logger.info(f"Parsed intent: {parsed_intent}")
     except Exception as e:
         logger.warning(f"Intent parsing failed, falling back to chat: {e}")
@@ -230,7 +230,8 @@ def chat():
     try:
         analysis_payload = {
             "events": all_events,
-            "language": parsed_intent.language
+            "language": parsed_intent.language,
+            "history": history,
         }
         if data.get("focus"):
             analysis_payload["focus"] = data.get("focus")

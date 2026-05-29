@@ -43,7 +43,8 @@ class IntentParser:
 
         raise ValueError(f"Unknown LLM provider: {name}.")
 
-    def parse(self, user_query: str, today: Optional[date] = None, history: Optional[list] = None) -> IntentParsingResult:
+    def parse(self, user_query: str, today: Optional[date] = None,
+              history: Optional[list] = None) -> IntentParsingResult:
         if not user_query or not user_query.strip():
             raise ValueError("User query cannot be empty")
 

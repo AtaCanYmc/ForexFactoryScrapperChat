@@ -149,6 +149,10 @@ class AnalysisRequest(BaseModel):
         None,
         description="Optional focus area: trading, investment, macro, etc.",
     )
+    history: List[dict] = Field(
+        default_factory=list,
+        description="Conversational history for contextual analysis",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={

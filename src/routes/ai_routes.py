@@ -164,6 +164,7 @@ def chat():
         logger.warning(f"Invalid JSON: {e}")
         return jsonify({"error": "Request must be valid JSON"}), 400
 
+    history = data.get("history", [])
     message = data.get("message")
     if not message or not isinstance(message, str):
         return jsonify({"error": "'message' field required and must be a string"}), 400

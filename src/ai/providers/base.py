@@ -15,6 +15,7 @@ class LLMProvider(ABC):
             focus: Optional[str] = None,
             example_count: int = 0,
             response_style: Optional[str] = None,
+            history: Optional[list] = None,
     ) -> EconomicAnalysisResult:
         """Analyze economic events and return structured result."""
         pass
@@ -27,6 +28,7 @@ class IntentParserProvider(ABC):
     def parse_intent(
             self,
             user_query: str,
-            current_date: datetime
+            current_date: datetime,
+            history: Optional[list] = None,
     ) -> IntentParsingResult:
         """Parse user intent from free-form query and return structured result."""

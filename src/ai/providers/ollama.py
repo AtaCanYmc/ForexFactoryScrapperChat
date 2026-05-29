@@ -46,6 +46,7 @@ class OllamaProvider(LLMProvider):
             focus: Optional[str] = None,
             example_count: int = 0,
             response_style: Optional[str] = None,
+            history: Optional[list] = None,
     ) -> EconomicAnalysisResult:
         """Analyze events using local Ollama model."""
         try:
@@ -58,9 +59,19 @@ class OllamaProvider(LLMProvider):
                 response_style=response_style,
             )
 
+            history_str = ""
+            if history:
+                history_str = "Chat History:\n"
+                for turn in history:
+                    role = "Assistant" if turn.get("role") == "bot" else "User"
+                    history_str += f"{role}: {turn.get('text', '')}\n"
+                history_str += "\n"
+
+            full_prompt = history_str + prompt
+
             response = self.requests.post(
                 self.endpoint,
-                json={"model": self.model, "prompt": prompt, "stream": False},
+                json={"model": self.model, "prompt": full_prompt, "stream": False},
                 timeout=120,
             )
             response.raise_for_status()
@@ -108,12 +119,23 @@ class OllamaIntentParserProvider(IntentParserProvider):
             self,
             user_query: str,
             current_date: datetime,
+            history: Optional[list] = None,
     ) -> IntentParsingResult:
         system_prompt = build_intent_system_prompt(current_date)
         user_prompt = build_intent_user_prompt(user_query)
 
+        history_str = ""
+        if history:
+            history_str = "Chat History:\n"
+            for turn in history:
+                role = "Assistant" if turn.get("role") == "bot" else "User"
+                history_str += f"{role}: {turn.get('text', '')}\n"
+            history_str += "\n"
+
         full_prompt = (
-            f"{system_prompt}\n\n{user_prompt}\n\n"
+            f"{system_prompt}\n\n"
+            f"{history_str}"
+            f"{user_prompt}\n\n"
             "Yanıtını aşağıdaki JSON yapısında ver:\n"
             "{\n"
             '  "intent_type": "fetch_data" veya "chat",\n'

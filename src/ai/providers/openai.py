@@ -43,6 +43,7 @@ class OpenAIProvider(LLMProvider):
             focus: Optional[str] = None,
             example_count: int = 0,
             response_style: Optional[str] = None,
+            history: Optional[list] = None,
     ) -> EconomicAnalysisResult:
         """Analyze events using OpenAI API with structured output."""
         try:
@@ -55,13 +56,17 @@ class OpenAIProvider(LLMProvider):
                 response_style=response_style,
             )
 
+            messages = [{"role": "system", "content": system_prompt}]
+            if history:
+                for turn in history:
+                    role = "assistant" if turn.get("role") == "bot" else "user"
+                    messages.append({"role": role, "content": turn.get("text", "")})
+            messages.append({"role": "user", "content": user_prompt})
+
             response = self.client.chat.completions.create(
                 response_format={"type": "json_object"},  # type: ignore
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+                messages=messages,  # type: ignore
                 temperature=0.3,
                 timeout=30,
             )
@@ -94,18 +99,23 @@ class OpenAIIntentParserProvider(IntentParserProvider):
             self,
             user_query: str,
             current_date: datetime,
+            history: Optional[list] = None,
     ) -> IntentParsingResult:
         system_prompt = build_intent_system_prompt(current_date)
         user_prompt = build_intent_user_prompt(user_query)
         tools = [get_fetch_economic_data_tool_definition()]
 
         try:
+            messages = [{"role": "system", "content": system_prompt}]
+            if history:
+                for turn in history:
+                    role = "assistant" if turn.get("role") == "bot" else "user"
+                    messages.append({"role": role, "content": turn.get("text", "")})
+            messages.append({"role": "user", "content": user_prompt})
+
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+                messages=messages,
                 tools=tools,
                 tool_choice="auto",
                 temperature=0.3,

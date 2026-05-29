@@ -69,7 +69,8 @@ class SimpleIntentParser:
     def parse(
             self,
             user_query: str,
-            today: Optional[date] = None
+            today: Optional[date] = None,
+            history: Optional[List[dict]] = None
     ) -> IntentParsingResult:
         """Parse intent using keyword heuristics."""
         today = today or date.today()
